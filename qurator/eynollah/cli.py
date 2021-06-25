@@ -92,6 +92,12 @@ from qurator.eynollah.eynollah import Eynollah
     help="if this parameter set to true, this tool would ignore headers role in reading order",
 )
 @click.option(
+    "--import-page",
+    "-ip",
+    type=click.Path(exists=True, dir_okay=False),
+    help="if a file is given, text regions will be used from this document as a base for text line detection",
+)
+@click.option(
     "--log-level",
     "-l",
     type=click.Choice(['OFF', 'DEBUG', 'INFO', 'WARN', 'ERROR']),
@@ -112,6 +118,7 @@ def main(
     input_binary,
     allow_scaling,
     headers_off,
+    import_page,
     log_level
 ):
     if log_level:
@@ -138,6 +145,7 @@ def main(
         input_binary=input_binary,
         allow_scaling=allow_scaling,
         headers_off=headers_off,
+        imported_page_uri=import_page
     )
     pcgts = eynollah.run()
     eynollah.writer.write_pagexml(pcgts)

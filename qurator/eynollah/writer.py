@@ -178,7 +178,7 @@ class EynollahXmlWriter():
                 points_co += str(int((found_polygons_text_region_img[mm][lmm,0,1] + page_coord[0]) / self.scale_y))
                 points_co += ' '
             img_region.get_Coords().set_points(points_co[:-1])
-            
+
         for mm in range(len(polygons_lines_to_be_written_in_xml)):
             sep_hor = SeparatorRegionType(id=counter.next_region_id, Coords=CoordsType())
             page.add_SeparatorRegion(sep_hor)
@@ -192,23 +192,48 @@ class EynollahXmlWriter():
 
         return pcgts
 
-    def build_pagexml_full_layout(self, found_polygons_text_region, found_polygons_text_region_h, page_coord, order_of_texts, id_of_texts, all_found_texline_polygons, all_found_texline_polygons_h, all_box_coord, all_box_coord_h, found_polygons_text_region_img, found_polygons_tables, found_polygons_drop_capitals, found_polygons_marginals, all_found_texline_polygons_marginals, all_box_coord_marginals, slopes, slopes_marginals, cont_page, polygons_lines_to_be_written_in_xml):
+    def build_pagexml_full_layout(self, found_polygons_text_region, found_polygons_text_region_h, page_coord, order_of_texts, id_of_texts, all_found_texline_polygons, all_found_texline_polygons_h, all_box_coord, all_box_coord_h, found_polygons_text_region_img, found_polygons_tables, found_polygons_drop_capitals, found_polygons_marginals, all_found_texline_polygons_marginals, all_box_coord_marginals, slopes, slopes_marginals, cont_page, polygons_lines_to_be_written_in_xml, imported_page):
         self.logger.debug('enter build_pagexml_full_layout')
 
+        metadata = None
+        if imported_page:
+            metadata = imported_page.get_metadata_comments()
+
         # create the file structure
-        pcgts = self.pcgts if self.pcgts else create_page_xml(self.image_filename, self.height_org, self.width_org)
+        pcgts = self.pcgts if self.pcgts else create_page_xml(self.image_filename, self.height_org, self.width_org, metadata)
         page = pcgts.get_Page()
+        # TODO add option to copy border from imported page
         page.set_Border(BorderType(Coords=CoordsType(points=self.calculate_page_coords(cont_page))))
+
+        imported_regions = []
+        for found_text_region in found_polygons_text_region:
+            coords_points = self.calculate_polygon_coords(found_text_region, page_coord)
+            matching_region = imported_page.get_matching_region_from_coords(coords_points)
+            if not matching_region:
+                raise Exception('Not all regions matched imported region coordinates.')
+            imported_regions.append(matching_region)
 
         counter = EynollahIdCounter()
         _counter_marginals = EynollahIdCounter(region_idx=len(order_of_texts))
         id_of_marginalia = [_counter_marginals.next_region_id for _ in found_polygons_marginals]
-        xml_reading_order(page, order_of_texts, id_of_marginalia)
+        xml_reading_order(page, order_of_texts, id_of_marginalia, [region['id'] for region in imported_regions])
+
 
         for mm in range(len(found_polygons_text_region)):
-            textregion = TextRegionType(id=counter.next_region_id, type_='paragraph',
-                    TextEquiv=[TextEquivType(index=0, Unicode='')],
-                    Coords=CoordsType(points=self.calculate_polygon_coords(found_polygons_text_region[mm], page_coord)))
+            coords_points = self.calculate_polygon_coords(found_polygons_text_region[mm], page_coord)
+            if imported_page:
+                matching_region = imported_page.get_matching_region_from_coords(coords_points)
+                if not matching_region:
+                    raise Exception('Not all regions matched imported region coordinates.')
+                new_id = matching_region['id']
+                text_equiv = matching_region['textEquiv'].text
+                coords_points = matching_region['coords'].attrib['points']
+            else:
+                new_id = counter.next_region_id
+                text_equiv = ''
+            textregion = TextRegionType(id=new_id, type_='paragraph',
+                                        TextEquiv=[TextEquivType(index=0, Unicode=text_equiv)],
+                                        Coords=CoordsType(points=coords_points))
             page.add_TextRegion(textregion)
             self.serialize_lines_in_region(textregion, all_found_texline_polygons, mm, page_coord, all_box_coord, slopes, counter)
 

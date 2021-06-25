@@ -6,3 +6,8 @@ tensorflow-gpu >= 1.15, < 2
 imutils >= 0.5.3
 matplotlib
 setuptools >= 50
+
+numpy~=1.18.5
+scipy~=1.6.3
+click~=8.0.1
+Shapely~=1.7.1

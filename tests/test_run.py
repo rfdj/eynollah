@@ -14,7 +14,7 @@ class TestEynollahRun(TestCase):
         with pushd_popd(tempdir=True) as tempdir:
             code, out, err = self.invoke_cli(eynollah_cli, [
                 '-m', EYNOLLAH_MODELS,
-                '-i', str(testdir.joinpath('resources/kant_aufklaerung_1784_0020.tif')),
+                '-i', str(testdir.joinpath('resources', 'kant_aufklaerung_1784_0020.tif')),
                 '-o', tempdir
             ])
             print(code, out, err)

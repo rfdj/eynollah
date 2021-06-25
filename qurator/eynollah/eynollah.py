@@ -6,27 +6,33 @@
 tool to extract table form data from alto xml data
 """
 
+import gc
 import math
 import os
 import sys
 import time
 import warnings
-from pathlib import Path
 from multiprocessing import Process, Queue, cpu_count
-import gc
-from ocrd_utils import getLogger
+from pathlib import Path
+
 import cv2
+import matplotlib
 import numpy as np
+from matplotlib import pyplot as plt
+from ocrd_utils import getLogger
+
+from .imported_page import ImportedPage
+
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 stderr = sys.stderr
 sys.stderr = open(os.devnull, "w")
 from keras import backend as K
 from keras.models import load_model
+
 sys.stderr = stderr
 import tensorflow as tf
 tf.get_logger().setLevel("ERROR")
 warnings.filterwarnings("ignore")
-
 
 from .utils.contour import (
     filter_contours_area_of_image,
@@ -71,33 +77,35 @@ from .plot import EynollahPlotter
 from .writer import EynollahXmlWriter
 
 SLOPE_THRESHOLD = 0.13
-RATIO_OF_TWO_MODEL_THRESHOLD = 95.50 #98.45:
+RATIO_OF_TWO_MODEL_THRESHOLD = 95.50  # 98.45:
 DPI_THRESHOLD = 298
 MAX_SLOPE = 999
 KERNEL = np.ones((5, 5), np.uint8)
 
+
 class Eynollah:
     def __init__(
-        self,
-        dir_models,
-        image_filename,
-        image_pil=None,
-        image_filename_stem=None,
-        dir_out=None,
-        dir_of_cropped_images=None,
-        dir_of_layout=None,
-        dir_of_deskewed=None,
-        dir_of_all=None,
-        enable_plotting=False,
-        allow_enhancement=False,
-        curved_line=False,
-        full_layout=False,
-        input_binary=False,
-        allow_scaling=False,
-        headers_off=False,
-        override_dpi=None,
-        logger=None,
-        pcgts=None,
+            self,
+            dir_models,
+            image_filename,
+            image_pil=None,
+            image_filename_stem=None,
+            dir_out=None,
+            dir_of_cropped_images=None,
+            dir_of_layout=None,
+            dir_of_deskewed=None,
+            dir_of_all=None,
+            enable_plotting=False,
+            allow_enhancement=False,
+            curved_line=False,
+            full_layout=False,
+            input_binary=False,
+            allow_scaling=False,
+            headers_off=False,
+            override_dpi=None,
+            logger=None,
+            pcgts=None,
+            imported_page_uri=None
     ):
         if image_pil:
             self._imgs = self._cache_images(image_pil=image_pil)
@@ -137,7 +145,11 @@ class Eynollah:
         self.model_page_dir = dir_models + "/model_page_mixed_best.h5"
         self.model_region_dir_p_ens = dir_models + "/model_ensemble_s.h5"
         self.model_textline_dir = dir_models + "/model_textline_newspapers.h5"
-        
+        self.imported_page = None
+
+        if imported_page_uri:
+            self.imported_page = ImportedPage(imported_page_uri)
+
     def _cache_images(self, image_filename=None, image_pil=None):
         ret = {}
         if image_filename:
@@ -706,7 +718,12 @@ class Eynollah:
         img_height_h = img.shape[0]
         img_width_h = img.shape[1]
 
-        model_region, session_region = self.start_new_session_and_model(self.model_region_dir_fully if patches else self.model_region_dir_fully_np)
+        if self.imported_page:
+            np_mask = self.imported_page.get_all_regions_as_np_mask(img_width_h, img_height_h)
+            return np_mask, np_mask
+
+        model_region, session_region = self.start_new_session_and_model(
+            self.model_region_dir_fully if patches else self.model_region_dir_fully_np)
 
         if not patches:
             img = otsu_copy_binary(img)
@@ -1151,8 +1168,13 @@ class Eynollah:
 
         img = resize_image(img_org, int(img_org.shape[0]*ratio_y), int(img_org.shape[1]*ratio_x))
 
-        prediction_regions_org_y = self.do_prediction(True, img, model_region)
-        prediction_regions_org_y = resize_image(prediction_regions_org_y, img_height_h, img_width_h )
+        if self.imported_page:
+            prediction_regions_org_y = self.imported_page.get_all_regions_as_np_mask(int(img_org.shape[1] * ratio_x),
+                                                                                     int(img_org.shape[0] * ratio_y))
+        else:
+            prediction_regions_org_y = self.do_prediction(True, img, model_region)
+
+        prediction_regions_org_y = resize_image(prediction_regions_org_y, img_height_h, img_width_h)
 
         #plt.imshow(prediction_regions_org_y[:,:,0])
         #plt.show()
@@ -1167,11 +1189,21 @@ class Eynollah:
             img_only_regions = cv2.erode(img_only_regions_with_sep[:,:], KERNEL, iterations=20)
 
             _, _ = find_num_col(img_only_regions, multiplier=6.0)
-            
-            img = resize_image(img_org, int(img_org.shape[0]), int(img_org.shape[1]*(1.2 if is_image_enhanced else 1)))
 
-            prediction_regions_org = self.do_prediction(True, img, model_region)
-            prediction_regions_org = resize_image(prediction_regions_org, img_height_h, img_width_h )
+            if self.imported_page:
+                prediction_regions_org = self.imported_page.get_all_regions_as_np_mask(
+                    int(img_org.shape[1] * (1.2 if is_image_enhanced else 1)),
+                    int(img_org.shape[0]))
+            else:
+                img = resize_image(img_org,
+                                   int(img_org.shape[0]),
+                                   int(img_org.shape[1] * (1.2 if is_image_enhanced else 1)))
+
+                prediction_regions_org = self.do_prediction(True, img, model_region)
+
+            prediction_regions_org = prediction_regions_org.astype(np.uint8)
+
+            prediction_regions_org = resize_image(prediction_regions_org, img_height_h, img_width_h)
 
             ##plt.imshow(prediction_regions_org[:,:,0])
             ##plt.show()
@@ -1244,14 +1276,19 @@ class Eynollah:
                 ratio_y=1
                 ratio_x=1
 
+                if self.imported_page:
+                    prediction_regions_org = self.imported_page.get_all_regions_as_np_mask(int(img_org.shape[1] * ratio_x),
+                                                                                           int(img_org.shape[0] * ratio_y))
+                else:
+                    img = resize_image(prediction_bin, int(img_org.shape[0] * ratio_y), int(img_org.shape[1] * ratio_x))
+                    prediction_regions_org = self.do_prediction(True, img, model_region)
 
-                img = resize_image(prediction_bin, int(img_org.shape[0]*ratio_y), int(img_org.shape[1]*ratio_x))
+                prediction_regions_org = prediction_regions_org.astype(np.uint8)
 
-                prediction_regions_org = self.do_prediction(True, img, model_region)
-                prediction_regions_org = resize_image(prediction_regions_org, img_height_h, img_width_h )
-                prediction_regions_org=prediction_regions_org[:,:,0]
-                
-                mask_lines_only=(prediction_regions_org[:,:]==3)*1
+                prediction_regions_org = resize_image(prediction_regions_org, img_height_h, img_width_h)
+                prediction_regions_org = prediction_regions_org[:, :, 0]
+
+                mask_lines_only = (prediction_regions_org[:, :] == 3) * 1
                 session_region.close()
                 del model_region
                 del session_region
@@ -1313,14 +1350,19 @@ class Eynollah:
             ratio_y=1
             ratio_x=1
 
+            if self.imported_page:
+                prediction_regions_org = self.imported_page.get_all_regions_as_np_mask(int(img_org.shape[1] * ratio_x),
+                                                                                       int(img_org.shape[0] * ratio_y))
+            else:
+                img = resize_image(prediction_bin, int(img_org.shape[0] * ratio_y), int(img_org.shape[1] * ratio_x))
+                prediction_regions_org = self.do_prediction(True, img, model_region)
 
-            img = resize_image(prediction_bin, int(img_org.shape[0]*ratio_y), int(img_org.shape[1]*ratio_x))
+            prediction_regions_org = prediction_regions_org.astype(np.uint8)
 
-            prediction_regions_org = self.do_prediction(True, img, model_region)
-            prediction_regions_org = resize_image(prediction_regions_org, img_height_h, img_width_h )
-            prediction_regions_org=prediction_regions_org[:,:,0]
-            
-            #mask_lines_only=(prediction_regions_org[:,:]==3)*1
+            prediction_regions_org = resize_image(prediction_regions_org, img_height_h, img_width_h)
+            prediction_regions_org = prediction_regions_org[:, :, 0]
+
+            # mask_lines_only=(prediction_regions_org[:,:]==3)*1
             session_region.close()
             del model_region
             del session_region
@@ -2071,7 +2113,15 @@ class Eynollah:
             else:
                 order_text_new, id_of_texts_tot = self.do_order_of_regions(contours_only_text_parent_d_ordered, contours_only_text_parent_h_d_ordered, boxes_d, textline_mask_tot_d)
 
-            pcgts = self.writer.build_pagexml_full_layout(contours_only_text_parent, contours_only_text_parent_h, page_coord, order_text_new, id_of_texts_tot, all_found_texline_polygons, all_found_texline_polygons_h, all_box_coord, all_box_coord_h, polygons_of_images, polygons_of_tabels, polygons_of_drop_capitals, polygons_of_marginals, all_found_texline_polygons_marginals, all_box_coord_marginals, slopes, slopes_marginals, cont_page, polygons_lines_xml)
+            pcgts = self.writer.build_pagexml_full_layout(contours_only_text_parent, contours_only_text_parent_h,
+                                                          page_coord, order_text_new, id_of_texts_tot,
+                                                          all_found_texline_polygons, all_found_texline_polygons_h,
+                                                          all_box_coord, all_box_coord_h, polygons_of_images,
+                                                          polygons_of_tabels, polygons_of_drop_capitals,
+                                                          polygons_of_marginals, all_found_texline_polygons_marginals,
+                                                          all_box_coord_marginals, slopes, slopes_marginals, cont_page,
+                                                          polygons_lines_xml,
+                                                          self.imported_page)
             self.logger.info("Job done in %ss", str(time.time() - t0))
             return pcgts
         else:

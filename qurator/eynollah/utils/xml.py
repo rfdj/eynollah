@@ -30,13 +30,14 @@ from ocrd_models.ocrd_page import (
 
     to_xml)
 
-def create_page_xml(imageFilename, height, width):
+def create_page_xml(imageFilename, height, width, comments=None):
     now = datetime.now()
     pcgts = PcGtsType(
         Metadata=MetadataType(
             Creator='SBB_QURATOR',
             Created=now,
-            LastChange=now
+            LastChange=now,
+            Comments=comments
         ),
         Page=PageType(
             imageWidth=str(width),
@@ -47,14 +48,18 @@ def create_page_xml(imageFilename, height, width):
         ))
     return pcgts
 
-def xml_reading_order(page, order_of_texts, id_of_marginalia):
+def xml_reading_order(page, order_of_texts, id_of_marginalia, text_ids=None):
     region_order = ReadingOrderType()
     og = OrderedGroupType(id="ro357564684568544579089")
     page.set_ReadingOrder(region_order)
     region_order.set_OrderedGroup(og)
     region_counter = EynollahIdCounter()
     for idx_textregion, _ in enumerate(order_of_texts):
-        og.add_RegionRefIndexed(RegionRefIndexedType(index=str(region_counter.get('region')), regionRef=region_counter.region_id(order_of_texts[idx_textregion] + 1)))
+        if text_ids:
+            text_id = text_ids[order_of_texts[idx_textregion]]
+        else:
+            text_id = region_counter.region_id(order_of_texts[idx_textregion] + 1)
+        og.add_RegionRefIndexed(RegionRefIndexedType(index=str(region_counter.get('region')), regionRef=text_id))
         region_counter.inc('region')
     for id_marginal in id_of_marginalia:
         og.add_RegionRefIndexed(RegionRefIndexedType(index=str(region_counter.get('region')), regionRef=id_marginal))
