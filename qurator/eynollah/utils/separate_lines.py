@@ -386,8 +386,9 @@ def separate_lines(img_patch, contour_text_interest, thetha, x_help, y_help):
 
             if point_down_narrow >= img_patch.shape[0]:
                 point_down_narrow = img_patch.shape[0] - 2
+            
 
-            distances = [cv2.pointPolygonTest(contour_text_interest_copy, (xv[mj], peaks[jj] + first_nonzero), True)
+            distances = [cv2.pointPolygonTest(contour_text_interest_copy, tuple(int(x) for x in np.array([xv[mj], peaks[jj] + first_nonzero])), True)
                             for mj in range(len(xv))]
             distances = np.array(distances)
 
@@ -448,8 +449,7 @@ def separate_lines(img_patch, contour_text_interest, thetha, x_help, y_help):
         pass
 
     elif len(peaks) == 1:
-        
-        distances = [cv2.pointPolygonTest(contour_text_interest_copy, (xv[mj], peaks[0] + first_nonzero), True)
+        distances = [cv2.pointPolygonTest(contour_text_interest_copy, tuple(int(x) for x in np.array([xv[mj], peaks[0] + first_nonzero])), True)
                         for mj in range(len(xv))]
         distances = np.array(distances)
 
@@ -529,8 +529,8 @@ def separate_lines(img_patch, contour_text_interest, thetha, x_help, y_help):
                     point_up = peaks_neg[2] + first_nonzero#peaks[jj] + first_nonzero - int(1. / 1.8 * dis_to_next)
                 except:
                     point_up =peaks[jj] + first_nonzero - int(1. / 1.8 * dis_to_next)
-
-            distances = [cv2.pointPolygonTest(contour_text_interest_copy, (xv[mj], peaks[jj] + first_nonzero), True)
+                    
+            distances = [cv2.pointPolygonTest(contour_text_interest_copy, tuple(int(x) for x in np.array([xv[mj], peaks[jj] + first_nonzero])), True)
                             for mj in range(len(xv))]
             distances = np.array(distances)
 
@@ -611,8 +611,8 @@ def separate_lines(img_patch, contour_text_interest, thetha, x_help, y_help):
 
                 point_up = peaks[jj] + first_nonzero - int(1. / 1.9 * dis_to_next_up)
                 point_down = peaks[jj] + first_nonzero + int(1. / 1.9 * dis_to_next_down)
-
-            distances = [cv2.pointPolygonTest(contour_text_interest_copy, (xv[mj], peaks[jj] + first_nonzero), True)
+                
+            distances = [cv2.pointPolygonTest(contour_text_interest_copy, tuple(int(x) for x in np.array([xv[mj], peaks[jj] + first_nonzero])), True)
                             for mj in range(len(xv))]
             distances = np.array(distances)
 
@@ -788,8 +788,8 @@ def separate_lines_vertical(img_patch, contour_text_interest, thetha):
 
             if point_down_narrow >= img_patch.shape[0]:
                 point_down_narrow = img_patch.shape[0] - 2
-
-            distances = [cv2.pointPolygonTest(contour_text_interest_copy, (xv[mj], peaks[jj] + first_nonzero), True) for mj in range(len(xv))]
+            
+            distances = [cv2.pointPolygonTest(contour_text_interest_copy, tuple(int(x) for x in np.array([xv[mj], peaks[jj] + first_nonzero])), True) for mj in range(len(xv))]
             distances = np.array(distances)
 
             xvinside = xv[distances >= 0]
@@ -870,8 +870,8 @@ def separate_lines_vertical(img_patch, contour_text_interest, thetha):
                 if point_down >= img_patch.shape[0]:
                     point_down = img_patch.shape[0] - 2
                 point_up = peaks[jj] + first_nonzero - int(1.0 / 1.8 * dis_to_next)
-
-            distances = [cv2.pointPolygonTest(contour_text_interest_copy, (xv[mj], peaks[jj] + first_nonzero), True) for mj in range(len(xv))]
+            
+            distances = [cv2.pointPolygonTest(contour_text_interest_copy, tuple(int(x) for x in np.array([xv[mj], peaks[jj] + first_nonzero])), True) for mj in range(len(xv))]
             distances = np.array(distances)
 
             xvinside = xv[distances >= 0]
@@ -930,8 +930,8 @@ def separate_lines_vertical(img_patch, contour_text_interest, thetha):
 
                 point_up = peaks[jj] + first_nonzero - int(1.0 / 1.9 * dis_to_next_up)
                 point_down = peaks[jj] + first_nonzero + int(1.0 / 1.9 * dis_to_next_down)
-
-            distances = [cv2.pointPolygonTest(contour_text_interest_copy, (xv[mj], peaks[jj] + first_nonzero), True) for mj in range(len(xv))]
+            
+            distances = [cv2.pointPolygonTest(contour_text_interest_copy, tuple(int(x) for x in np.array([xv[mj], peaks[jj] + first_nonzero])), True) for mj in range(len(xv))]
             distances = np.array(distances)
 
             xvinside = xv[distances >= 0]
